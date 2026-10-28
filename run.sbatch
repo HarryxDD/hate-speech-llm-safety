@@ -3,7 +3,6 @@
 #SBATCH --partition=gpumedium
 #SBATCH --gres=gpu:gh200:1
 #SBATCH --cpus-per-task=16
-#SBATCH --mem=128G
 #SBATCH --time=01:00:00
 #SBATCH --output=logs/%x-%j.out
 
