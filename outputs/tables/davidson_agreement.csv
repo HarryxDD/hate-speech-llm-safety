@@ -1,0 +1,4 @@
+label_name,mean agreement,unanimous %,at least one hate vote %,contains slur or profanity %
+hate,0.73,18.39,100.0,80.7
+offensive,0.92,74.76,17.25,93.86
+neither,0.9,68.99,6.05,9.54

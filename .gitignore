@@ -1,0 +1,18 @@
+# Data, model outputs, secrets and large arrays are never committed.
+data/
+# Only the result tables in outputs/tables/ may be committed.
+outputs/*
+!outputs/tables/
+.env
+*.npy
+checkpoints/
+
+# Python / tooling
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+slurm-*.out
+logs/
+
+PROJECT_PLAN.md

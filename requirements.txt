@@ -1,0 +1,8 @@
+# On Roihu, llm.py uses the CSC module python-pytorch/2.13
+# (torch 2.13, transformers 5.16).
+numpy==2.5.4
+pandas==3.1.0
+scikit-learn==1.9.1
+pyyaml==6.0.3
+requests==2.34.2
+ipykernel==7.1.0
