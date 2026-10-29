@@ -1,0 +1,4 @@
+dataset,n,hate precision,hate recall,hate F1,flagged % hate,flagged % offensive,flagged % neither
+davidson_test,4944,0.231,0.661,0.342,66.078,15.266,4.463
+davidson_balanced,849,0.733,0.661,0.695,66.078,18.021,6.007
+hatecheck,3728,0.964,0.804,0.877,80.414,0.342,8.591

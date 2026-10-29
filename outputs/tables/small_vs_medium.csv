@@ -1,0 +1,19 @@
+family,dataset,shots,medium,small,medium - small
+gemma2,davidson_balanced,0shot,0.726,0.664,0.063
+gemma2,davidson_balanced,3shot,0.665,0.626,0.04
+gemma2,davidson_test,0shot,0.592,0.515,0.077
+gemma2,davidson_test,3shot,0.513,0.458,0.055
+gemma2,hatecheck,0shot,0.689,0.589,0.1
+gemma2,hatecheck,3shot,0.743,0.603,0.139
+llama3,davidson_balanced,0shot,0.67,0.674,-0.004
+llama3,davidson_balanced,3shot,0.706,0.664,0.042
+llama3,davidson_test,0shot,0.659,0.635,0.024
+llama3,davidson_test,3shot,0.606,0.566,0.04
+llama3,hatecheck,0shot,0.724,0.64,0.084
+llama3,hatecheck,3shot,0.733,0.641,0.093
+qwen3,davidson_balanced,0shot,0.674,0.611,0.062
+qwen3,davidson_balanced,3shot,0.711,0.656,0.055
+qwen3,davidson_test,0shot,0.643,0.375,0.268
+qwen3,davidson_test,3shot,0.638,0.5,0.138
+qwen3,hatecheck,0shot,0.656,0.585,0.071
+qwen3,hatecheck,3shot,0.68,0.638,0.042

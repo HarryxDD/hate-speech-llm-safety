@@ -2,9 +2,12 @@
 
     python llm.py download                       download model weights (login node)
     python llm.py classify --model qwen3-4b      label posts as hate / offensive / neither
+                                                 (Davidson test, HateCheck, perturbed posts)
     python llm.py guard                          Llama Guard 3 on the same posts
     python llm.py refusal --model qwen3-4b       answer the refusal test requests
+                                                 (original and perturbed)
     python llm.py judge                          judge all refusal answers
+    python llm.py probe --model qwen3-4b         hidden states and per-layer probes
 
 Add --limit N to run on the first N items only (quick test, saved with a _quick suffix).
 Results that already exist are not computed again.
@@ -28,7 +31,9 @@ LABELS = CFG["labels"]
 DATA = Path("data/processed")
 PRED = Path("outputs/predictions")
 PRIVATE = Path("outputs/private")   # raw model answers to the refusal test (git-ignored)
-EVAL_SETS = {"davidson_test": "orig_id", "hatecheck": "case_id"}
+HIDDEN = Path("outputs/hidden")     # hidden states (.npy, git-ignored)
+EVAL_SETS = {"davidson_test": "orig_id", "hatecheck": "case_id", "perturbed": "id"}
+REQUEST_SETS = {"": "refusal_requests", "_perturbed": "refusal_requests_perturbed"}
 
 
 # model helpers
@@ -117,12 +122,27 @@ def score_labels(model, tok, prompts, batch_size):
     return probs / mass[:, None], mass
 
 
+def predict_file(model, tok, spec, dataset, shots, out, limit=None):
+    """Label every post of an evaluation set and save the predictions to out."""
+    df = pd.read_csv(DATA / f"{dataset}.csv")
+    df = df.head(limit) if limit else df
+    prompts = [chat_prompt(tok, spec, classification_messages(t, shots)) for t in df["text"]]
+    probs, mass = score_labels(model, tok, prompts, CFG["classification"]["batch_size"])
+    res = pd.DataFrame({"id": df[EVAL_SETS[dataset]], "label": df["label_name"],
+                        "pred": np.array(LABELS)[probs.argmax(1)], "label_mass": mass})
+    for i, lab in enumerate(LABELS):
+        res[f"p_{lab}"] = probs[:, i]
+    PRED.mkdir(parents=True, exist_ok=True)
+    res.to_csv(out, index=False)
+    print(f"{out.name}: accuracy {(res.pred == res.label).mean():.3f}, mean label mass {mass.mean():.3f}")
+
+
 def classify(args):
     train = pd.read_csv(DATA / "davidson_train.csv")
     shots = pick_fewshot(train, CFG["seed"])
     suffix = "_quick" if args.limit else ""
     model = None
-    for dataset, id_col in EVAL_SETS.items():
+    for dataset in EVAL_SETS:
         for k in (0, 3):
             out = PRED / f"{args.model}__{dataset}__{k}shot{suffix}.csv"
             if out.exists():
@@ -131,18 +151,7 @@ def classify(args):
             if model is None:
                 model, tok, spec = load_model(args.model)
                 start = time.time()
-            df = pd.read_csv(DATA / f"{dataset}.csv")
-            df = df.head(args.limit) if args.limit else df
-            prompts = [chat_prompt(tok, spec, classification_messages(t, shots[:k])) for t in df["text"]]
-            probs, mass = score_labels(model, tok, prompts, CFG["classification"]["batch_size"])
-            res = pd.DataFrame({"id": df[id_col], "label": df["label_name"],
-                                "pred": np.array(LABELS)[probs.argmax(1)], "label_mass": mass})
-            for i, lab in enumerate(LABELS):
-                res[f"p_{lab}"] = probs[:, i]
-            PRED.mkdir(parents=True, exist_ok=True)
-            res.to_csv(out, index=False)
-            print(f"{out.name}: accuracy {(res.pred == res.label).mean():.3f}, "
-                  f"mean label mass {mass.mean():.3f}")
+            predict_file(model, tok, spec, dataset, shots[:k], out, args.limit)
     if model is not None:
         save_info(PRED / f"{args.model}{suffix}.json", spec, time.time() - start)
 
@@ -202,30 +211,37 @@ def guard(args):
 
 # refusal test
 
+@torch.no_grad()
+def generate_answers(model, tok, spec, requests):
+    answers = []
+    for batch in batches(requests, CFG["refusal"]["batch_size"]):
+        prompts = [chat_prompt(tok, spec, [{"role": "user", "content": r}]) for r in batch]
+        enc = encode(tok, prompts, model.device)
+        seq = model.generate(**enc, do_sample=False, pad_token_id=tok.pad_token_id,
+                             max_new_tokens=CFG["refusal"]["max_new_tokens"])
+        answers += tok.batch_decode(seq[:, enc.input_ids.shape[1]:], skip_special_tokens=True)
+    return [a.strip() for a in answers]
+
+
 def refusal(args):
     suffix = "_quick" if args.limit else ""
-    out = PRIVATE / f"{args.model}__responses{suffix}.csv"
-    if out.exists():
-        print("exists:", out)
-        return
-    req = pd.read_csv(DATA / "refusal_requests.csv")
-    if args.limit:
-        req = req.groupby("level").head(args.limit)
-    model, tok, spec = load_model(args.model)
-    start = time.time()
-    answers = []
-    with torch.no_grad():
-        for batch in batches(req["text"].tolist(), CFG["refusal"]["batch_size"]):
-            prompts = [chat_prompt(tok, spec, [{"role": "user", "content": r}]) for r in batch]
-            enc = encode(tok, prompts, model.device)
-            seq = model.generate(**enc, do_sample=False, pad_token_id=tok.pad_token_id,
-                                 max_new_tokens=CFG["refusal"]["max_new_tokens"])
-            answers += tok.batch_decode(seq[:, enc.input_ids.shape[1]:], skip_special_tokens=True)
-    req["response"] = [a.strip() for a in answers]
-    PRIVATE.mkdir(parents=True, exist_ok=True)
-    req.to_csv(out, index=False)
-    save_info(PRIVATE / f"{args.model}__responses{suffix}.json", spec, time.time() - start)
-    print(f"{len(req)} responses -> {out}")
+    model = None
+    for tag, name in REQUEST_SETS.items():
+        out = PRIVATE / f"{args.model}__responses{tag}{suffix}.csv"
+        if out.exists():
+            print("exists:", out)
+            continue
+        if model is None:
+            model, tok, spec = load_model(args.model)
+        start = time.time()
+        req = pd.read_csv(DATA / f"{name}.csv")
+        if args.limit:
+            req = req.groupby(["level"] + (["perturbation"] if tag else [])).head(args.limit)
+        req["response"] = generate_answers(model, tok, spec, req["text"].tolist())
+        PRIVATE.mkdir(parents=True, exist_ok=True)
+        req.to_csv(out, index=False)
+        save_info(out.with_suffix(".json"), spec, time.time() - start)
+        print(f"{len(req)} responses -> {out}")
 
 
 def is_refusal(response):
@@ -237,9 +253,11 @@ def judge(args):
     """Add two judgements to every response file: refused (refusal pattern found) and
     harmful (Llama Guard rates the response unsafe)."""
     model = None
-    for path in sorted(PRIVATE.glob("*__responses.csv")):
+    for path in sorted(PRIVATE.glob("*__responses*.csv")):
+        if path.stem.endswith("_quick"):
+            continue
         out = path.with_name(path.name.replace("__responses", "__judged"))
-        if out.exists() and out.stat().st_mtime > path.stat().st_mtime:
+        if out.exists():
             print("exists:", out)
             continue
         df = pd.read_csv(path)
@@ -258,6 +276,115 @@ def judge(args):
               + (f", harmful {df.harmful.mean():.3f}" if "harmful" in df else ""))
 
 
+# hidden states and probes
+
+def post_span(prompt, text):
+    start = prompt.rfind(text)
+    return (start, start + len(text)) if start >= 0 else (0, len(prompt))
+
+
+@torch.no_grad()
+def hidden_states(model, tok, spec, texts, batch_size=16):
+    """Hidden states of every layer for the zero-shot classification prompt, pooled in two
+    ways: the last prompt token (where the answer starts) and the mean over the tokens of
+    the post. Returns two float16 arrays of shape (posts, layers + 1, hidden size)."""
+    last, mean = [], []
+    for batch in batches(list(texts), batch_size):
+        prompts = [chat_prompt(tok, spec, classification_messages(t, [])) for t in batch]
+        enc = tok(prompts, return_tensors="pt", padding=True, add_special_tokens=False,
+                  return_offsets_mapping=True)
+        offsets = enc.pop("offset_mapping")
+        spans = torch.tensor([post_span(p, t) for p, t in zip(prompts, batch)])
+        in_post = ((offsets[:, :, 0] >= spans[:, :1]) & (offsets[:, :, 1] <= spans[:, 1:])
+                   & (offsets[:, :, 1] > offsets[:, :, 0]))
+        out = model(**enc.to(model.device), output_hidden_states=True, logits_to_keep=1)
+        hs = torch.stack(out.hidden_states, dim=1).float()   # (batch, layers + 1, tokens, hidden)
+        last.append(hs[:, :, -1].half().cpu())
+        w = in_post.to(hs.device, hs.dtype)[:, None, :, None]
+        mean.append(((hs * w).sum(2) / w.sum(2).clamp(min=1)).half().cpu())
+    return torch.cat(last).numpy(), torch.cat(mean).numpy()
+
+
+def probe(args):
+    """Logistic regression probe on the hidden states of every layer, 5-fold cross-validated
+    on the balanced Davidson subset. Control: the same with shuffled labels. Each perturbed
+    post is labelled by the probe of the fold in which its original post was held out."""
+    import os
+    from joblib import Parallel, delayed
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.metrics import f1_score
+    from sklearn.model_selection import StratifiedKFold
+    from sklearn.pipeline import make_pipeline
+    from sklearn.preprocessing import StandardScaler
+
+    suffix = "_quick" if args.limit else ""
+    out = PRED / f"{args.model}__probe{suffix}.csv"
+    if out.exists():
+        print("exists:", out)
+        return
+    clean = pd.read_csv(DATA / "davidson_balanced.csv")
+    pert = pd.read_csv(DATA / "perturbed.csv")
+    pert = pert[pert.valid & (pert.source == "davidson")]
+    if args.limit:
+        clean = clean.head(args.limit)
+        pert = pert[pert.orig_id.isin(clean.orig_id)]
+    pert = pert.reset_index(drop=True)
+
+    HIDDEN.mkdir(parents=True, exist_ok=True)
+    model, X = None, {}
+    for name, texts in [("clean", clean.text), ("perturbed", pert.text)]:
+        paths = {pool: HIDDEN / f"{args.model}__{name}__{pool}{suffix}.npy" for pool in ("last", "mean")}
+        if not all(p.exists() for p in paths.values()):
+            if model is None:
+                model, tok, spec = load_model(args.model)
+                start = time.time()
+            for pool, arr in zip(("last", "mean"), hidden_states(model, tok, spec, texts)):
+                np.save(paths[pool], arr)
+        X[name] = {pool: np.load(p) for pool, p in paths.items()}
+    if model is not None:
+        save_info(HIDDEN / f"{args.model}{suffix}.json", spec, time.time() - start)
+        del model
+        torch.cuda.empty_cache()
+
+    y = clean.label_name.values
+    y_control = np.random.default_rng(CFG["seed"]).permutation(y)
+    folds = list(StratifiedKFold(5, shuffle=True, random_state=CFG["seed"]).split(y, y))
+    fold_of = dict(zip(clean.orig_id.values[np.concatenate([t for _, t in folds])],
+                       np.repeat(range(5), [len(t) for _, t in folds])))
+    pert_fold = pert.orig_id.map(fold_of).values
+    f1 = lambda a, b: f1_score(a, b, labels=LABELS, average="macro", zero_division=0)
+
+    def run_layer(pool, layer):
+        Xc = X["clean"][pool][:, layer].astype(np.float32)
+        Xp = X["perturbed"][pool][:, layer].astype(np.float32)
+        pred_c, pred_ctrl, pred_p = np.empty(len(y), object), np.empty(len(y), object), np.empty(len(pert), object)
+        for k, (tr, te) in enumerate(folds):
+            clf = make_pipeline(StandardScaler(), LogisticRegression(max_iter=2000)).fit(Xc[tr], y[tr])
+            pred_c[te] = clf.predict(Xc[te])
+            if (pert_fold == k).any():
+                pred_p[pert_fold == k] = clf.predict(Xp[pert_fold == k])
+            ctrl = make_pipeline(StandardScaler(), LogisticRegression(max_iter=2000)).fit(Xc[tr], y_control[tr])
+            pred_ctrl[te] = ctrl.predict(Xc[te])
+        rows = [{"data": "clean", "n": len(y), "macro_f1_after": f1(y, pred_c)},
+                {"data": "control", "n": len(y), "macro_f1_after": f1(y_control, pred_ctrl)}]
+        before = pd.Series(pred_c, index=clean.orig_id.values)
+        for name, idx in pert.groupby("perturbation").indices.items():
+            p = pert.iloc[idx]
+            b = before.loc[p.orig_id].values
+            rows.append({"data": name, "n": len(idx),
+                         "macro_f1_before": f1(p.orig_label, b), "macro_f1_after": f1(p.label_name, pred_p[idx]),
+                         "hate_rate_before": (b == "hate").mean(), "hate_rate_after": (pred_p[idx] == "hate").mean()})
+        return [{"model": args.model, "pooling": pool, "layer": layer, **r} for r in rows]
+
+    n_layers = X["clean"]["last"].shape[1]
+    jobs = [(pool, layer) for pool in ("last", "mean") for layer in range(n_layers)]
+    results = Parallel(n_jobs=len(os.sched_getaffinity(0)))(delayed(run_layer)(*j) for j in jobs)
+    res = pd.DataFrame([r for rows in results for r in rows])
+    res.to_csv(out, index=False)
+    best = res[res.data == "clean"].sort_values("macro_f1_after").iloc[-1]
+    print(f"{out.name}: best layer {best.layer} ({best.pooling}), macro-F1 {best.macro_f1_after:.3f}")
+
+
 # download
 
 def download(args):
@@ -274,7 +401,7 @@ def download(args):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("command", choices=["download", "classify", "guard", "refusal", "judge"])
+    ap.add_argument("command", choices=["download", "classify", "guard", "refusal", "judge", "probe"])
     ap.add_argument("--model", help="model name from config.yaml")
     ap.add_argument("--limit", type=int, help="only the first N items (quick test)")
     ap.add_argument("--no-guard", action="store_true", help="judge: keyword check only")

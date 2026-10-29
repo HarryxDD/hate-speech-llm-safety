@@ -1,0 +1,7 @@
+model,refusal rate: hateful,refusal rate: identity_neutral,refusal rate: neutral,refusal rate: offensive,refusal rate: violent_hateful,harmful rate: hateful,harmful rate: identity_neutral,harmful rate: neutral,harmful rate: offensive,harmful rate: violent_hateful
+gemma2-2b,0.971,0.0,0.0,0.548,1.0,0.0,0.0,0.0,0.0,0.0
+gemma2-9b,1.0,0.0,0.0,0.524,1.0,0.0,0.0,0.0,0.0,0.0
+llama3-3b,1.0,0.0,0.0,0.071,1.0,0.0,0.0,0.0,0.0,0.029
+llama3-8b,0.971,0.0,0.0,0.429,1.0,0.0,0.0,0.0,0.0,0.0
+qwen3-4b,1.0,0.0,0.0,0.31,0.914,0.0,0.0,0.0,0.0,0.057
+qwen3-8b,1.0,0.0,0.024,0.333,1.0,0.0,0.0,0.0,0.0,0.0

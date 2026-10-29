@@ -9,16 +9,20 @@ speech from offensive language, and do they refuse to write hateful text?
 |---|---|---|
 | `config.yaml` | All settings: data sources, models, prompt, refusal requests, word lists | |
 | `notebook.ipynb` | Data preparation, then all tables and analysis | laptop |
-| `llm.py` | Everything that runs a language model | Roihu GPU |
-| `run.sbatch` | Slurm script that runs one `llm.py` command | Roihu |
+| `llm.py` | Everything that runs a language model: classify, Llama Guard, refusal test, probes | Roihu GPU |
+| `finetune.py` | LoRA and QLoRA fine-tuning, then evaluation of the fine-tuned model | Roihu GPU |
+| `run.sbatch` | Slurm script that runs one `llm.py` command (or `finetune.py`) | Roihu |
 
-Outputs: `data/processed/` (prepared data), `outputs/predictions/` (model predictions),
-`outputs/tables/` (result tables), `outputs/private/` (model answers to the refusal test,
-never shared).
+Outputs: `data/processed/` (prepared data), `outputs/predictions/` (model predictions and
+probe results), `outputs/tables/` (result tables and figures), `outputs/private/` (model
+answers to the refusal test and files for manual checks, never shared), `outputs/hidden/`
+(hidden states), `outputs/adapters/` (fine-tuned adapters), `outputs/api/` (cached API
+responses).
 
 ## How to run
 
-1. Laptop: run `notebook.ipynb` section 1 (data).
+1. Laptop: run `notebook.ipynb` sections 1 (data) and 5 (perturbed texts). Section 5 needs
+   `torch` and `transformers` for BERTScore (see `requirements.txt`).
 2. Copy the project to Roihu (`rsync`, without `.venv` and `.env`).
 3. Roihu login node: `module load python-pytorch/2.13`, set `HF_HUB_CACHE`
    (see `run.sbatch`) and run `python llm.py download`.
@@ -30,9 +34,22 @@ never shared).
      sbatch --job-name=ref-$m run.sbatch refusal --model $m
    done
    sbatch --job-name=guard run.sbatch guard
-   sbatch --job-name=judge run.sbatch judge      # after the refusal jobs have finished
+   for m in qwen3-4b qwen3-8b llama3-3b llama3-8b gemma2-2b gemma2-9b; do
+     sbatch --job-name=probe-$m run.sbatch probe --model $m
+   done
+   for m in qwen3-4b qwen3-8b; do
+     for method in lora qlora; do
+       sbatch --job-name=ft-$m-$method run.sbatch finetune.py --model $m --method $method
+     done
+   done
+   sbatch --job-name=judge run.sbatch judge      # after the refusal and fine-tuning jobs
    ```
-5. Copy `outputs/` back to the laptop and run the rest of the notebook.
+5. Copy `outputs/` back to the laptop (without `outputs/hidden/` and `outputs/adapters/`,
+   which are large and only needed on Roihu) and run the rest of the notebook. Section 6
+   calls the moderation APIs with the keys in `.env`.
+
+`classify`, `guard` and `refusal` also run on the perturbed texts. Results that already
+exist are skipped, so the same commands only add what is missing.
 
 ## Method
 
@@ -50,6 +67,28 @@ never shared).
 - **Metrics.** Per-class precision, recall and F1, macro-F1 with a 95% bootstrap CI,
   confusion matrices, and the shares of hate predicted as offensive and of offensive
   predicted as hate.
+- **Perturbations.** The balanced Davidson subset and the refusal requests are changed in
+  four ways: letters replaced by look-alike symbols (10% or 30% of letters, or only in
+  slurs and profanity), words replaced by WordNet synonyms (20% or 40%), identity group
+  words replaced by "those people", and the group replaced by a non-protected target such
+  as "lawyers". HateCheck templates give clean pairs of the same sentence with and without
+  an identity group. BERTScore and Jaccard similarity measure how much each text changed;
+  synonym texts with low BERTScore are dropped. Effects are measured as flip rate (share of
+  changed predictions), change in macro-F1 and hate recall, and how often removing or
+  adding the group changes the hate decision.
+- **Moderation APIs.** OpenAI moderation and Azure AI Content Safety scores are mapped to
+  the three classes with two thresholds tuned on a balanced validation sample.
+- **Probes.** A logistic regression probe on the hidden states of every layer (last prompt
+  token and mean over the post), 5-fold cross-validated, with a shuffled-label control.
+  The gap between the best probe and the model's answer shows whether the model separates
+  the classes internally when its answer is wrong.
+- **Fine-tuning.** Qwen3 4B and 8B are trained to answer with the label, with LoRA (bf16)
+  and QLoRA (4-bit NF4), on the same class-balanced sample and settings. Baselines: Jaccard
+  nearest neighbours and logistic regression on frozen DistilBERT features. Empath compares
+  the themes of correct and wrong answers.
+- **Error analysis.** Posts still confused between hate and offensive after fine-tuning
+  are tagged with rule-based error types (implicit hate, no clear target, reclaimed slur,
+  dialect markers, quote or retweet, split annotators) and 100 of them are reviewed by hand.
 
 ## Data
 

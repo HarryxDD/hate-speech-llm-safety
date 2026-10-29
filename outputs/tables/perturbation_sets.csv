@@ -1,0 +1,9 @@
+perturbation,n,valid,hate,offensive,neither,jaccard,bertscore
+hc_remove_target,1105,1105,1105,0,0,0.773,
+implicit_group,247,247,191,43,13,0.677,0.742
+remove_target,191,191,191,0,0,0.794,0.815
+symbols_10,704,704,228,234,242,0.695,0.63
+symbols_30,833,833,274,280,279,0.443,0.307
+symbols_slurs,545,545,236,277,32,0.762,0.705
+synonyms_20,221,214,70,79,72,0.852,0.894
+synonyms_40,380,359,124,115,141,0.823,0.864
