@@ -118,14 +118,15 @@ def main():
         model = PeftModel.from_pretrained(model, adapter)
         print("loaded adapter:", adapter)
     else:
-        if torch.cuda.is_available():
+        gpu = torch.cuda.is_available()
+        if gpu:
             torch.cuda.reset_peak_memory_stats()
+        weights_gb = round(torch.cuda.memory_allocated() / 2**30, 2) if gpu else None
         start = time.time()
         model, info = train(model, tok, spec, args.limit)
         info |= {"model": spec["id"], "revision": spec["revision"], "method": args.method,
-                 "train_seconds": round(time.time() - start, 1),
-                 "peak_gpu_memory_gb": round(torch.cuda.max_memory_allocated() / 2**30, 2)
-                 if torch.cuda.is_available() else None}
+                 "train_seconds": round(time.time() - start, 1), "model_memory_gb": weights_gb,
+                 "peak_gpu_memory_gb": round(torch.cuda.max_memory_allocated() / 2**30, 2) if gpu else None}
         model.save_pretrained(adapter)
         PRED.mkdir(parents=True, exist_ok=True)
         info_path.write_text(json.dumps(info, indent=2))
