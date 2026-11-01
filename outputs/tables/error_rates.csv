@@ -1,0 +1,49 @@
+model,direction,feature,n_with,wrong_with,n_without,wrong_without
+qwen3-4b+lora,hate→offensive,group word,191,2.6,92,28.3
+qwen3-4b+lora,hate→offensive,no clear target,28,7.1,255,11.4
+qwen3-4b+lora,hate→offensive,reclaimed slur,39,7.7,244,11.5
+qwen3-4b+lora,hate→offensive,dialect (AAE markers),32,9.4,251,11.2
+qwen3-4b+lora,hate→offensive,quote or retweet,93,8.6,190,12.1
+qwen3-4b+lora,hate→offensive,annotators split,206,14.6,77,1.3
+qwen3-4b+lora,offensive→hate,group word,569,76.6,3263,5.5
+qwen3-4b+lora,offensive→hate,no clear target,875,5.1,2957,19.3
+qwen3-4b+lora,offensive→hate,reclaimed slur,369,72.6,3463,10.1
+qwen3-4b+lora,offensive→hate,dialect (AAE markers),604,16.6,3228,16.0
+qwen3-4b+lora,offensive→hate,quote or retweet,1575,15.0,2257,16.8
+qwen3-4b+lora,offensive→hate,annotators split,654,47.1,3178,9.7
+qwen3-4b+qlora,hate→offensive,group word,191,3.7,92,30.4
+qwen3-4b+qlora,hate→offensive,no clear target,28,10.7,255,12.5
+qwen3-4b+qlora,hate→offensive,reclaimed slur,39,12.8,244,12.3
+qwen3-4b+qlora,hate→offensive,dialect (AAE markers),32,12.5,251,12.4
+qwen3-4b+qlora,hate→offensive,quote or retweet,93,12.9,190,12.1
+qwen3-4b+qlora,hate→offensive,annotators split,206,16.0,77,2.6
+qwen3-4b+qlora,offensive→hate,group word,569,69.1,3263,5.9
+qwen3-4b+qlora,offensive→hate,no clear target,875,6.3,2957,17.9
+qwen3-4b+qlora,offensive→hate,reclaimed slur,369,61.2,3463,10.4
+qwen3-4b+qlora,offensive→hate,dialect (AAE markers),604,14.2,3228,15.5
+qwen3-4b+qlora,offensive→hate,quote or retweet,1575,13.9,2257,16.2
+qwen3-4b+qlora,offensive→hate,annotators split,654,43.6,3178,9.4
+qwen3-8b+lora,hate→offensive,group word,191,2.1,92,32.6
+qwen3-8b+lora,hate→offensive,no clear target,28,14.3,255,11.8
+qwen3-8b+lora,hate→offensive,reclaimed slur,39,7.7,244,12.7
+qwen3-8b+lora,hate→offensive,dialect (AAE markers),32,12.5,251,12.0
+qwen3-8b+lora,hate→offensive,quote or retweet,93,11.8,190,12.1
+qwen3-8b+lora,hate→offensive,annotators split,206,15.5,77,2.6
+qwen3-8b+lora,offensive→hate,group word,569,74.0,3263,6.2
+qwen3-8b+lora,offensive→hate,no clear target,875,6.9,2957,19.1
+qwen3-8b+lora,offensive→hate,reclaimed slur,369,67.2,3463,10.9
+qwen3-8b+lora,offensive→hate,dialect (AAE markers),604,15.7,3228,16.4
+qwen3-8b+lora,offensive→hate,quote or retweet,1575,15.2,2257,17.1
+qwen3-8b+lora,offensive→hate,annotators split,654,45.6,3178,10.3
+qwen3-8b+qlora,hate→offensive,group word,191,3.7,92,27.2
+qwen3-8b+qlora,hate→offensive,no clear target,28,3.6,255,12.2
+qwen3-8b+qlora,hate→offensive,reclaimed slur,39,12.8,244,11.1
+qwen3-8b+qlora,hate→offensive,dialect (AAE markers),32,15.6,251,10.8
+qwen3-8b+qlora,hate→offensive,quote or retweet,93,11.8,190,11.1
+qwen3-8b+qlora,hate→offensive,annotators split,206,15.5,77,0.0
+qwen3-8b+qlora,offensive→hate,group word,569,70.1,3263,6.4
+qwen3-8b+qlora,offensive→hate,no clear target,875,6.4,2957,18.7
+qwen3-8b+qlora,offensive→hate,reclaimed slur,369,61.2,3463,11.0
+qwen3-8b+qlora,offensive→hate,dialect (AAE markers),604,13.9,3228,16.2
+qwen3-8b+qlora,offensive→hate,quote or retweet,1575,14.3,2257,17.0
+qwen3-8b+qlora,offensive→hate,annotators split,654,45.1,3178,9.8

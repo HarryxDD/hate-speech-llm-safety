@@ -1,0 +1,7 @@
+model,best layer,layers,pooling,probe macro-F1,control,answer macro-F1,probe - answer
+gemma2-2b,26,26,last,0.826,0.313,0.664,0.163
+gemma2-9b,28,42,last,0.828,0.313,0.726,0.101
+llama3-3b,22,28,last,0.819,0.363,0.674,0.145
+llama3-8b,32,32,last,0.831,0.346,0.67,0.161
+qwen3-4b,29,36,last,0.811,0.33,0.611,0.2
+qwen3-8b,36,36,last,0.823,0.341,0.674,0.15

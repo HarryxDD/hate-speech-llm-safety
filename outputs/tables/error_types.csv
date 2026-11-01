@@ -1,0 +1,15 @@
+model,direction,n,implicit (no group named),no clear target,reclaimed slur,dialect (AAE markers),quote or retweet,annotators split
+qwen3-4b (0-shot),hate→offensive,22,59.1,13.6,0.0,9.1,45.5,90.9
+qwen3-4b (0-shot),offensive→hate,2015,0.0,18.6,17.9,17.2,42.0,24.2
+qwen3-8b (0-shot),hate→offensive,145,40.0,9.7,17.9,14.5,31.7,80.0
+qwen3-8b (0-shot),offensive→hate,219,0.0,10.0,28.8,14.2,44.7,48.9
+qwen3-4b+lora,hate→offensive,31,83.9,6.5,9.7,9.7,25.8,96.8
+qwen3-4b+lora,offensive→hate,617,0.0,7.3,43.4,16.2,38.4,49.9
+qwen3-4b+qlora,hate→offensive,35,80.0,8.6,14.3,11.4,34.3,94.3
+qwen3-4b+qlora,offensive→hate,585,0.0,9.4,38.6,14.7,37.4,48.7
+qwen3-8b+lora,hate→offensive,34,88.2,11.8,8.8,11.8,32.4,94.1
+qwen3-8b+lora,offensive→hate,624,0.0,9.6,39.7,15.2,38.3,47.8
+qwen3-8b+qlora,hate→offensive,32,78.1,3.1,15.6,15.6,34.4,100.0
+qwen3-8b+qlora,offensive→hate,608,0.0,9.2,37.2,13.8,37.0,48.5
+all hate and offensive posts,true hate,283,32.5,9.9,13.8,11.3,32.9,72.8
+all hate and offensive posts,true offensive,3832,0.0,22.8,9.6,15.8,41.1,17.1

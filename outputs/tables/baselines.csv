@@ -1,0 +1,5 @@
+model,dataset,n,macro_f1,hate_p,hate_r,hate_f1,offensive_p,offensive_r,offensive_f1,neither_p,neither_r,neither_f1,hate→off,off→hate,f1_ci
+Jaccard 5-NN,davidson_test,4944,0.517,0.425,0.12,0.187,0.827,0.978,0.896,0.811,0.327,0.466,0.834,0.009,"[0.494, 0.538]"
+Jaccard 5-NN,davidson_balanced,849,0.417,0.829,0.12,0.21,0.398,0.982,0.566,0.853,0.329,0.474,0.834,0.007,"[0.382, 0.449]"
+frozen DistilBERT + LR,davidson_test,4944,0.632,0.203,0.587,0.302,0.949,0.773,0.852,0.678,0.819,0.742,0.279,0.152,"[0.617, 0.648]"
+frozen DistilBERT + LR,davidson_balanced,849,0.732,0.706,0.587,0.641,0.683,0.792,0.733,0.818,0.827,0.822,0.279,0.159,"[0.700, 0.761]"
