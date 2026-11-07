@@ -8,6 +8,8 @@
                                                  (original and perturbed)
     python llm.py judge                          judge all refusal answers
     python llm.py probe --model qwen3-4b         hidden states and per-layer probes
+    python llm.py prompting --model qwen3-4b     other prompting strategies (--strategy cot, ...)
+    python llm.py normalize --model qwen3-4b     classify with look-alike symbols turned into letters
 
 Add --limit N to run on the first N items only (quick test, saved with a _quick suffix).
 Results that already exist are not computed again.
@@ -32,6 +34,8 @@ DATA = Path("data/processed")
 PRED = Path("outputs/predictions")
 PRIVATE = Path("outputs/private")   # raw model answers to the refusal test (git-ignored)
 HIDDEN = Path("outputs/hidden")     # hidden states (.npy, git-ignored)
+PROMPTING = Path("outputs/prompting")
+PIPELINE = Path("outputs/pipeline")
 EVAL_SETS = {"davidson_test": "orig_id", "hatecheck": "case_id", "perturbed": "id"}
 REQUEST_SETS = {"": "refusal_requests", "_perturbed": "refusal_requests_perturbed"}
 
@@ -88,26 +92,22 @@ def pick_fewshot(train, seed):
     return shots.sample(frac=1, random_state=seed)[["text", "label_name"]].values.tolist()
 
 
-def classification_messages(text, shots):
-    messages = [{"role": "system", "content": CFG["classification"]["system_prompt"]}]
+def classification_messages(text, shots, system=None, content=None):
+    messages = [{"role": "system", "content": system or CFG["classification"]["system_prompt"]}]
     for shot_text, shot_label in shots:
         messages += [{"role": "user", "content": f"Post: {shot_text}"},
                      {"role": "assistant", "content": shot_label}]
-    return messages + [{"role": "user", "content": f"Post: {text}"}]
+    return messages + [{"role": "user", "content": content or f"Post: {text}"}]
 
 
 @torch.no_grad()
-def score_labels(model, tok, prompts, batch_size):
+def score_labels(model, tok, prompts, batch_size, words=None):
     """Probability of each label as the model's answer.
 
-    The three label words start with different tokens, so the first token of the answer
-    decides the label. For every label, the probabilities of the first tokens of its
-    spellings ("hate", "Hate") are added up. Returns the probabilities normalised over
-    the three labels, and the total probability of all label tokens (label_mass): a low
-    mass means the model would rather have answered something else."""
-    first_ids = {lab: sorted({tok(w, add_special_tokens=False).input_ids[0]
-                              for w in CFG["classification"]["label_words"][lab]})
-                 for lab in LABELS}
+    The three label words start with different tokens, so the first token of the answer decides the label. For every label, the probabilities of the first tokens of its spellings ("hate", "Hate") are added up. Returns the probabilities normalised over the three labels, and the total probability of all label tokens (label_mass): a low mass means the model would rather have answered something else. words can give other answer words, for example yes and no."""
+    words = words or CFG["classification"]["label_words"]
+    first_ids = {lab: sorted({tok(w, add_special_tokens=False).input_ids[0] for w in spellings})
+                 for lab, spellings in words.items()}
     all_ids = [i for ids in first_ids.values() for i in ids]
     assert len(all_ids) == len(set(all_ids)), "labels share a first token"
 
@@ -116,7 +116,7 @@ def score_labels(model, tok, prompts, batch_size):
         enc = encode(tok, batch, model.device)
         logits = model(**enc, logits_to_keep=1).logits[:, -1].float()
         p = torch.softmax(logits, dim=-1)
-        probs.append(torch.stack([p[:, first_ids[lab]].sum(-1) for lab in LABELS], dim=1).cpu())
+        probs.append(torch.stack([p[:, ids].sum(-1) for ids in first_ids.values()], dim=1).cpu())
     probs = torch.cat(probs).numpy()
     mass = probs.sum(1)
     return probs / mass[:, None], mass
@@ -253,7 +253,7 @@ def judge(args):
     """Add two judgements to every response file: refused (refusal pattern found) and
     harmful (Llama Guard rates the response unsafe)."""
     model = None
-    for path in sorted(PRIVATE.glob("*__responses*.csv")):
+    for path in sorted([*PRIVATE.glob("*__responses*.csv"), *(PRIVATE / "pipeline").glob("*__responses*.csv")]):
         if path.stem.endswith("_quick"):
             continue
         out = path.with_name(path.name.replace("__responses", "__judged"))
@@ -385,6 +385,171 @@ def probe(args):
     print(f"{out.name}: best layer {best.layer} ({best.pooling}), macro-F1 {best.macro_f1_after:.3f}")
 
 
+# prompting strategies and symbol normalization
+
+INVERSE_SYMBOLS = {v: k for k, v in CFG["perturbation"]["symbol_map"].items()}
+
+
+def normalize_symbols(text):
+    """Turn look-alike symbols back into letters (@ -> a, 3 -> e, ...). Mentions, links
+    and numbers are kept."""
+    def fix(m):
+        w = m.group(0)
+        has_letter = re.search("[A-Za-z]", w)
+        if w in ("@USER", "URL") or set(w) == {"*"}:
+            return w
+        if has_letter or (re.search("[@$*]", w) and not re.search("[0-9]", w)):
+            return "".join(INVERSE_SYMBOLS.get(c, c) for c in w)
+        return w
+    return re.sub(r"[A-Za-z0-9@$*]+", fix, text)
+
+
+def user_content(text, inp="none"):
+    """User message for one post. inp: none, norm (normalised post) or both."""
+    if inp == "none":
+        return f"Post: {text}"
+    norm = normalize_symbols(text)
+    if inp == "norm" or norm == text:
+        return f"Post: {norm}"
+    return CFG["pipeline"]["both_template"].format(text=text, norm=norm)
+
+
+def eval_set(name, limit=None):
+    """Evaluation set with the columns id, text and label_name."""
+    if name == "balanced":
+        df = pd.read_csv(DATA / "davidson_balanced.csv").rename(columns={"orig_id": "id"})
+    elif name == "hatecheck_sample":
+        hc = pd.read_csv(DATA / "hatecheck.csv").rename(columns={"case_id": "id"})
+        n = CFG["prompting"]["hatecheck_per_test"]
+        df = pd.concat([g.sample(min(n, len(g)), random_state=CFG["seed"])
+                        for _, g in hc.groupby("functionality")])
+    else:
+        df = pd.read_csv(DATA / f"{name}.csv").rename(columns={EVAL_SETS[name]: "id"})
+    return df.head(limit) if limit else df
+
+
+@torch.no_grad()
+def generate(model, tok, prompts, max_new_tokens, samples=1):
+    """Greedy answers, or several sampled answers per prompt."""
+    P = CFG["prompting"]
+    kw = {"do_sample": False}
+    if samples > 1:
+        kw = {"do_sample": True, "temperature": P["temperature"], "top_p": P["top_p"],
+              "num_return_sequences": samples}
+    answers = []
+    for batch in batches(prompts, max(1, P["batch_size"] // samples)):
+        enc = encode(tok, batch, model.device)
+        seq = model.generate(**enc, max_new_tokens=max_new_tokens, pad_token_id=tok.pad_token_id, **kw)
+        answers += tok.batch_decode(seq[:, enc.input_ids.shape[1]:], skip_special_tokens=True)
+    return [a.strip() for a in answers]
+
+
+def cut_reasoning(text):
+    """Text before the "Answer:" line."""
+    m = re.search(r"answer\s*:", text, re.I)
+    return (text[:m.start()] if m else text).strip()
+
+
+def run_strategy(model, tok, spec, strategy, texts, inp="none"):
+    """Returns predictions, label probabilities, label mass and extra columns."""
+    P, C = CFG["prompting"], CFG["classification"]
+    bs = C["batch_size"]
+    msgs = lambda system, t: chat_prompt(tok, spec, classification_messages(t, [], system, user_content(t, inp)))
+    extra = {}
+    if strategy in ("definitions", "vanilla"):
+        system = C["system_prompt"] if strategy == "definitions" else P["vanilla"]
+        probs, mass = score_labels(model, tok, [msgs(system, t) for t in texts], bs)
+    elif strategy in ("cot", "self_consistency"):
+        # self-consistency: majority vote, ties go to the higher mean probability
+        k = P["samples"] if strategy == "self_consistency" else 1
+        prompts = [msgs(P["cot"], t) for t in texts]
+        reasoning = [cut_reasoning(r) for r in generate(model, tok, prompts, P["max_new_tokens"], k)]
+        full = [p + r + "\nAnswer:" for p, r in zip([p for p in prompts for _ in range(k)], reasoning)]
+        p_all, m_all = score_labels(model, tok, full, bs, P["answer_words"])
+        p_all, m_all = p_all.reshape(len(texts), k, 3), m_all.reshape(len(texts), k)
+        votes = np.stack([(p_all.argmax(2) == i).sum(1) for i in range(3)], axis=1)
+        pred = np.array(LABELS)[(votes + p_all.mean(1)).argmax(1)]
+        probs, mass = votes / k if k > 1 else p_all[:, 0], m_all.mean(1)
+        extra["reasoning"] = [" ||| ".join(reasoning[i * k:(i + 1) * k]) for i in range(len(texts))]
+        return pred, probs, mass, extra
+    elif strategy == "tree_of_thought":
+        # one argument for each label, then the model picks the most convincing one
+        branch = [chat_prompt(tok, spec, classification_messages(
+                      t, [], P["tot_branch"], f"{user_content(t, inp)}\nCategory: {lab}"))
+                  for t in texts for lab in LABELS]
+        args_ = [a.replace("\n", " ") for a in generate(model, tok, branch, P["branch_tokens"])]
+        judge_prompts = []
+        for i, t in enumerate(texts):
+            arguments = "\n".join(f"Argument for {lab}: {args_[3 * i + j]}" for j, lab in enumerate(LABELS))
+            judge_prompts.append(chat_prompt(tok, spec, classification_messages(
+                t, [], P["tot_judge"], f"{user_content(t, inp)}\n\n{arguments}")))
+        probs, mass = score_labels(model, tok, judge_prompts, bs)
+        extra["reasoning"] = [" ||| ".join(args_[3 * i:3 * i + 3]) for i in range(len(texts))]
+    elif strategy == "two_questions":
+        # hate: yes to the target question, offensive: no to it and yes to the insult question
+        yes = {}
+        masses = []
+        for q in ("question_target", "question_insult"):
+            yn, m = score_labels(model, tok, [msgs(P[q], t) for t in texts], bs, P["yes_no_words"])
+            yes[q] = yn[:, 0]
+            masses.append(m)
+        target, insult = yes["question_target"], yes["question_insult"]
+        probs = np.stack([target, (1 - target) * insult, (1 - target) * (1 - insult)], axis=1)
+        mass = np.mean(masses, axis=0)
+        extra = {"p_target": target, "p_insult": insult}
+    else:
+        raise ValueError(f"unknown strategy {strategy}")
+    return np.array(LABELS)[probs.argmax(1)], probs, mass, extra
+
+
+def save_predictions(df, pred, probs, mass, extra, out):
+    res = pd.DataFrame({"id": df["id"].values, "label": df["label_name"].values, "pred": pred, "label_mass": mass})
+    for i, lab in enumerate(LABELS):
+        res[f"p_{lab}"] = probs[:, i]
+    for col, values in extra.items():
+        res[col] = values
+    out.parent.mkdir(parents=True, exist_ok=True)
+    res.to_csv(out, index=False)
+    print(f"{out.name}: accuracy {(res.pred == res.label).mean():.3f}, mean label mass {np.mean(mass):.3f}")
+
+
+def prompting(args):
+    """Prompting strategies on the balanced Davidson set and the HateCheck sample."""
+    suffix = "_quick" if args.limit else ""
+    strategies = [args.strategy] if args.strategy else CFG["prompting"]["strategies"]
+    model = None
+    for strategy in strategies:
+        for dataset in ("balanced", "hatecheck_sample"):
+            out = PROMPTING / f"{args.model}__{dataset}__{strategy}{suffix}.csv"
+            if out.exists():
+                print("exists:", out)
+                continue
+            if model is None:
+                model, tok, spec = load_model(args.model)
+            df = eval_set(dataset, args.limit)
+            start = time.time()
+            save_predictions(df, *run_strategy(model, tok, spec, strategy, df["text"].tolist()), out)
+            save_info(out.with_suffix(".json"), spec, time.time() - start)
+
+
+def normalize(args):
+    """Zero-shot classification with the norm and both inputs."""
+    suffix = "_quick" if args.limit else ""
+    model = None
+    for dataset in EVAL_SETS:
+        for inp in ("norm", "both"):
+            out = PIPELINE / f"{args.model}__{dataset}__{inp}{suffix}.csv"
+            if out.exists():
+                print("exists:", out)
+                continue
+            if model is None:
+                model, tok, spec = load_model(args.model)
+            df = eval_set(dataset, args.limit)
+            start = time.time()
+            save_predictions(df, *run_strategy(model, tok, spec, "definitions", df["text"].tolist(), inp), out)
+            save_info(out.with_suffix(".json"), spec, time.time() - start)
+
+
 # download
 
 def download(args):
@@ -401,8 +566,10 @@ def download(args):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("command", choices=["download", "classify", "guard", "refusal", "judge", "probe"])
+    ap.add_argument("command", choices=["download", "classify", "guard", "refusal", "judge", "probe",
+                                        "prompting", "normalize"])
     ap.add_argument("--model", help="model name from config.yaml")
+    ap.add_argument("--strategy", help="prompting: one strategy from config.yaml (default: all)")
     ap.add_argument("--limit", type=int, help="only the first N items (quick test)")
     ap.add_argument("--no-guard", action="store_true", help="judge: keyword check only")
     args = ap.parse_args()

@@ -41,6 +41,55 @@ classification:
     neither: [neither, Neither]
   batch_size: 64
 
+# prompting strategies
+# The definitions and few-shot prompts are the classification runs above.
+prompting:
+  strategies: [vanilla, cot, self_consistency, tree_of_thought, two_questions]
+  hatecheck_per_test: 25
+  batch_size: 32
+  max_new_tokens: 160 # length of the reasoning
+  branch_tokens: 80 # length of each tree-of-thought argument
+  samples: 5 # self-consistency answers per post
+  temperature: 0.7
+  top_p: 0.95
+  answer_words:
+    hate: [" hate", " Hate"]
+    offensive: [" offensive", " Offensive"]
+    neither: [" neither", " Neither"]
+  yes_no_words:
+    "yes": ["yes", "Yes"]
+    "no": ["no", "No"]
+  vanilla: |-
+    Classify the social media post as hate, offensive or neither. Answer with one word.
+  cot: |-
+    You are a content moderator. Classify the social media post into exactly one category.
+    hate: attacks or demeans a group of people because of a protected identity (race, religion, ethnicity, gender, sexual orientation, disability, nationality, ...).
+    offensive: rude, vulgar or insulting, but does not target an identity group.
+    neither: everything else.
+    Think step by step before you answer. In at most four short sentences, say who or what the post targets, whether this target is a group with a protected identity, and whether the language is rude, vulgar or insulting. Then write your answer on the last line as "Answer: hate", "Answer: offensive" or "Answer: neither".
+  tot_branch: |-
+    You are a content moderator. A social media post belongs to exactly one category.
+    hate: attacks or demeans a group of people because of a protected identity (race, religion, ethnicity, gender, sexual orientation, disability, nationality, ...).
+    offensive: rude, vulgar or insulting, but does not target an identity group.
+    neither: everything else.
+    You get a post and one category. Give the strongest argument, in at most two sentences, that the post belongs to this category.
+  tot_judge: |-
+    You are a content moderator. A social media post belongs to exactly one category.
+    hate: attacks or demeans a group of people because of a protected identity (race, religion, ethnicity, gender, sexual orientation, disability, nationality, ...).
+    offensive: rude, vulgar or insulting, but does not target an identity group.
+    neither: everything else.
+    You get a post and three arguments, one for each category. Decide which argument is the most convincing under these definitions. Answer with one word: hate, offensive or neither.
+  question_target: |-
+    You are a content moderator. Does the social media post attack or demean a group of people because of a protected identity (race, religion, ethnicity, gender, sexual orientation, disability, nationality, ...)? Insults against one person or against a group without a protected identity do not count. Answer with one word: yes or no.
+  question_insult: |-
+    You are a content moderator. Is the social media post rude, vulgar or insulting? Answer with one word: yes or no.
+
+# symbol normalization
+pipeline:
+  # none: original post, norm: symbols turned into letters, both: original and normalized post
+  inputs: [none, norm, both]
+  both_template: "Post: {text}\nThe same post with look-alike symbols turned back into letters: {norm}"
+
 # refusal test
 refusal:
   max_new_tokens: 256
