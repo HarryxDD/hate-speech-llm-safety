@@ -6,6 +6,7 @@ outputs/*
 .env
 *.npy
 checkpoints/
+*.tar.gz
 
 # Python / tooling
 .venv/

@@ -1,0 +1,13 @@
+dataset,model,vanilla,definitions,fewshot,cot,self_consistency,tree_of_thought,two_questions
+balanced,gemma2-2b,0.658,0.664,0.626,0.632,0.648,0.716,0.392
+balanced,gemma2-9b,0.664,0.726,0.665,0.635,0.644,0.657,0.573
+balanced,llama3-3b,0.679,0.674,0.664,0.702,0.715,0.262,0.574
+balanced,llama3-8b,0.518,0.67,0.706,0.717,0.715,0.701,0.578
+balanced,qwen3-4b,0.459,0.611,0.656,0.657,0.676,0.579,0.574
+balanced,qwen3-8b,0.62,0.674,0.711,0.685,0.698,0.683,0.628
+hatecheck_sample,gemma2-2b,0.597,0.572,0.584,0.645,0.655,0.638,0.667
+hatecheck_sample,gemma2-9b,0.645,0.686,0.735,0.763,0.784,0.772,0.756
+hatecheck_sample,llama3-3b,0.644,0.694,0.669,0.656,0.66,0.208,0.72
+hatecheck_sample,llama3-8b,0.6,0.766,0.778,0.767,0.785,0.669,0.652
+hatecheck_sample,qwen3-4b,0.568,0.569,0.656,0.602,0.602,0.62,0.749
+hatecheck_sample,qwen3-8b,0.597,0.679,0.696,0.638,0.634,0.706,0.732

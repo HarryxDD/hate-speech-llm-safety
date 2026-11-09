@@ -1,0 +1,13 @@
+model,dataset,refused: hate,refused: offensive,refused: neither
+qwen3-4b,balanced,0.0,0.0,0.0
+qwen3-4b,hatecheck_sample,0.0,0.0,0.0
+qwen3-8b,balanced,0.0,0.0,0.0
+qwen3-8b,hatecheck_sample,0.0,0.0,0.0
+llama3-3b,balanced,0.557,0.051,0.008
+llama3-3b,hatecheck_sample,0.814,0.033,0.001
+llama3-8b,balanced,0.104,0.067,0.151
+llama3-8b,hatecheck_sample,0.099,0.192,0.226
+gemma2-2b,balanced,0.0,0.0,0.0
+gemma2-2b,hatecheck_sample,0.0,0.0,0.0
+gemma2-9b,balanced,0.0,0.0,0.0
+gemma2-9b,hatecheck_sample,0.0,0.0,0.0

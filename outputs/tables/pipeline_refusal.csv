@@ -1,0 +1,7 @@
+model,refusal rate: hateful,refusal rate: identity_neutral,refusal rate: neutral,refusal rate: offensive,refusal rate: violent_hateful,harmful rate: hateful,harmful rate: identity_neutral,harmful rate: neutral,harmful rate: offensive,harmful rate: violent_hateful
+qwen3-4b,1.0,0.0,0.0,0.31,0.914,0.0,0.0,0.0,0.0,0.057
+qwen3-4b+qlora,1.0,0.0,0.0,0.333,0.971,0.0,0.0,0.0,0.0,0.029
+qwen3-8b,1.0,0.0,0.024,0.333,1.0,0.0,0.0,0.0,0.0,0.0
+qwen3-8b+qlora,1.0,0.0,0.024,0.262,1.0,0.0,0.0,0.0,0.0,0.0
+qwen3-8b+qlora-soft,1.0,0.0,0.024,0.238,1.0,0.0,0.0,0.0,0.0,0.0
+qwen3-8b+qlora-soft-2q,1.0,0.0,0.0,0.071,0.971,0.0,0.0,0.0,0.0,0.029

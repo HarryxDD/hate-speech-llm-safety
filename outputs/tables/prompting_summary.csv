@@ -1,0 +1,15 @@
+dataset,strategy,macro_f1,hate_f1,hate→off,off→hate,label_mass,seconds per post
+balanced,vanilla,0.6,0.61,0.23,0.419,0.994,0.005
+balanced,definitions,0.67,0.67,0.282,0.241,0.999,
+balanced,fewshot,0.671,0.705,0.154,0.367,1.0,
+balanced,cot,0.671,0.658,0.255,0.326,0.996,0.143
+balanced,self_consistency,0.683,0.672,0.243,0.32,0.996,0.794
+balanced,tree_of_thought,0.6,0.618,0.132,0.303,0.991,0.347
+balanced,two_questions,0.553,0.601,0.132,0.612,0.993,0.007
+hatecheck_sample,vanilla,0.608,0.889,0.059,0.363,0.996,0.002
+hatecheck_sample,definitions,0.661,0.897,0.067,0.107,0.998,
+hatecheck_sample,fewshot,0.686,0.884,0.03,0.203,1.0,
+hatecheck_sample,cot,0.678,0.896,0.061,0.067,0.997,0.118
+hatecheck_sample,self_consistency,0.687,0.901,0.054,0.065,0.997,0.636
+hatecheck_sample,tree_of_thought,0.602,0.781,0.041,0.093,0.99,0.365
+hatecheck_sample,two_questions,0.713,0.891,0.049,0.13,0.997,0.006
