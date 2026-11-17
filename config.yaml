@@ -12,6 +12,8 @@ data:
   # Non-hateful HateCheck functionalities that count as offensive. All hateful cases are
   # hate, all other non-hateful cases are neither.
   hatecheck_offensive: [profanity_nh, target_obj_nh, target_indiv_nh, target_group_nh]
+  hatexplain_url: https://raw.githubusercontent.com/hate-alert/HateXplain/01d742279dac941981f53806154481c0e15ee686/Data/dataset.json
+  hatexplain_split_url: https://raw.githubusercontent.com/hate-alert/HateXplain/01d742279dac941981f53806154481c0e15ee686/Data/post_id_divisions.json
 
 # models
 # system_role false: the system text is put into the first user message.
@@ -22,6 +24,8 @@ models:
   llama3-8b: {id: meta-llama/Llama-3.1-8B-Instruct, revision: 0e9e39f249a16976918f6564b8830bc894c89659, family: llama3, size: medium}
   gemma2-2b: {id: google/gemma-2-2b-it, revision: 299a8560bedf22ed1c72a8a11e7dce4a7f9f51f8, family: gemma2, size: small, system_role: false}
   gemma2-9b: {id: google/gemma-2-9b-it, revision: 11c9b309abf73637e4b6f9a3fa1e92e615547819, family: gemma2, size: medium, system_role: false}
+  gemma2-27b: {id: google/gemma-2-27b-it, revision: aaf20e6b9f4c0fcf043f6fb2a2068419086d77b0, family: gemma2, size: large, system_role: false}
+  qwen3-32b: {id: Qwen/Qwen3-32B, revision: 9216db5781bf21249d130ec9da846c4624c16137, family: qwen3, size: large}
   llama-guard: {id: meta-llama/Llama-Guard-3-8B, revision: 7327bd9f6efbbe6101dc6cc4736302b3cbb6e425, family: llama_guard, size: medium}
   # Small model for quick tests on a laptop. Not part of the results.
   qwen3-0.6b: {id: Qwen/Qwen3-0.6B, revision: c1899de289a04d12100db370d81485cdf75e47ca, family: test, size: small}

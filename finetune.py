@@ -3,6 +3,7 @@
     python finetune.py --model qwen3-4b --method lora
     python finetune.py --model qwen3-4b --method qlora
     python finetune.py --model qwen3-8b --method qlora --target soft --format two_questions
+    python finetune.py --model qwen3-8b --method qlora --target soft --format two_questions --train hatexplain
 """
 
 import argparse
@@ -46,18 +47,18 @@ def load_base(name, method):
     return model, tok, spec
 
 
-def training_sample(limit):
+def training_sample(limit, data="davidson"):
     """Class-balanced sample of the train split."""
-    train = pd.read_csv(DATA / "davidson_train.csv").drop_duplicates("text")
+    train = pd.read_csv(DATA / f"{data}_train.csv").drop_duplicates("text")
     n = limit or FT["per_class"]
     sample = pd.concat([g.sample(n, replace=len(g) < n, random_state=CFG["seed"])
                         for _, g in train.groupby("label_name")])
     return sample.sample(frac=1, random_state=CFG["seed"])
 
 
-def training_examples(tok, spec, limit):
+def training_examples(tok, spec, limit, data="davidson"):
     """Training sample tokenized as prompt + label word."""
-    sample = training_sample(limit)
+    sample = training_sample(limit, data)
     examples = []
     for text, label in zip(sample.text, sample.label_name):
         prompt = tok(chat_prompt(tok, spec, classification_messages(text, [])), add_special_tokens=False).input_ids
@@ -70,10 +71,10 @@ def first_token(tok, word):
     return tok(word, add_special_tokens=False).input_ids[0]
 
 
-def target_examples(tok, spec, limit, target, fmt):
+def target_examples(tok, spec, limit, target, fmt, data="davidson"):
     """Examples of (prompt, answer tokens, target probabilities). soft uses the share of
     annotator votes, two_questions gives two yes/no examples per post."""
-    sample = training_sample(limit)
+    sample = training_sample(limit, data)
     if target == "soft":
         q = sample[["votes_hate", "votes_offensive", "votes_neither"]].to_numpy(float)
         q = q / q.sum(1, keepdims=True)
@@ -125,12 +126,13 @@ def collate(batch, pad_id, device):
     return ids.to(device), mask.to(device), labels.to(device)
 
 
-def train(model, tok, spec, limit, target="hard", fmt="single"):
+def train(model, tok, spec, limit, target="hard", fmt="single", data="davidson"):
     lc = FT["lora"]
     model = get_peft_model(model, LoraConfig(r=lc["r"], lora_alpha=lc["alpha"], lora_dropout=lc["dropout"],
                                              target_modules="all-linear", task_type="CAUSAL_LM"))
     plain = target == "hard" and fmt == "single"
-    examples = training_examples(tok, spec, limit) if plain else target_examples(tok, spec, limit, target, fmt)
+    examples = (training_examples(tok, spec, limit, data) if plain
+                else target_examples(tok, spec, limit, target, fmt, data))
     steps = FT["epochs"] * math.ceil(len(examples) / FT["batch_size"])
     params = [p for p in model.parameters() if p.requires_grad]
     opt = torch.optim.AdamW(params, lr=FT["lr"], weight_decay=0.0)
@@ -168,14 +170,16 @@ def main():
     ap.add_argument("--target", default="hard", choices=["hard", "soft"],
                     help="hard: majority label; soft: share of annotator votes")
     ap.add_argument("--format", default="single", choices=["single", "two_questions"])
+    ap.add_argument("--train", default="davidson", choices=["davidson", "hatexplain"], help="training data")
     ap.add_argument("--limit", type=int, help="quick test: N training examples per class, N posts per set")
     args = ap.parse_args()
     torch.manual_seed(CFG["seed"])
     suffix = "_quick" if args.limit else ""
-    plain = args.target == "hard" and args.format == "single"
+    plain = args.target == "hard" and args.format == "single" and args.train == "davidson"
     name = f"{args.model}+{args.method}"
     if not plain:
-        name += f"-{args.target}" + ("-2q" if args.format == "two_questions" else "")
+        name += (f"-{args.target}" + ("-2q" if args.format == "two_questions" else "")
+                 + ("-hx" if args.train == "hatexplain" else ""))
     out_dir, private_dir = (PRED, PRIVATE) if plain else (PIPELINE, PRIVATE / "pipeline")
     adapter = ADAPTERS / f"{name}{suffix}"
     info_path = out_dir / f"{name}{suffix}.json"
@@ -190,9 +194,9 @@ def main():
             torch.cuda.reset_peak_memory_stats()
         weights_gb = round(torch.cuda.memory_allocated() / 2**30, 2) if gpu else None
         start = time.time()
-        model, info = train(model, tok, spec, args.limit, args.target, args.format)
+        model, info = train(model, tok, spec, args.limit, args.target, args.format, args.train)
         info |= {"model": spec["id"], "revision": spec["revision"], "method": args.method,
-                 "target": args.target, "format": args.format,
+                 "target": args.target, "format": args.format, "train_data": args.train,
                  "train_seconds": round(time.time() - start, 1), "model_memory_gb": weights_gb,
                  "peak_gpu_memory_gb": round(torch.cuda.max_memory_allocated() / 2**30, 2) if gpu else None}
         model.save_pretrained(adapter)

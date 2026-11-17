@@ -44,6 +44,11 @@ responses).
    done
    sbatch --job-name=judge run.sbatch judge      # after the refusal and fine-tuning jobs
    ```
+   Larger models (Gemma 2 27B, Qwen3-32B) use the same commands with `--model gemma2-27b`
+   or `--model qwen3-32b`. Our method trained on HateXplain:
+   ```bash
+   sbatch --job-name=ft-hx run.sbatch finetune.py --model qwen3-8b --method qlora --target soft --format two_questions --train hatexplain
+   ```
 5. Copy `outputs/` back to the laptop (without `outputs/hidden/` and `outputs/adapters/`,
    which are large and only needed on Roihu) and run the rest of the notebook. Section 6
    calls the moderation APIs with the keys in `.env`.
@@ -107,6 +112,7 @@ exist are skipped, so the same commands only add what is missing.
 | Davidson et al. (2017), "Hate Speech and Offensive Language" (same file as the Kaggle copy) | GitHub `t-davidson/hate-speech-and-offensive-language` @ `cb50f7e` | MIT | 24,783 tweets |
 | HateCheck (Röttger et al., 2021) | HF `Paul/hatecheck` @ `9d2ac89` | CC BY 4.0 | 3,728 cases, 29 functionalities |
 | HateCheck template placeholders | GitHub `paul-rottger/hatecheck-data` @ `3490854` | CC BY 4.0 | identity terms and slurs |
+| HateXplain (Mathew et al., 2021) | GitHub `hate-alert/HateXplain` @ `01d7422` | MIT | 20,148 posts (Twitter and Gab), test split 1,924 |
 
 ### Davidson
 

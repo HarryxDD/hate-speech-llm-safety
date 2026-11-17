@@ -2,7 +2,7 @@
 
     python llm.py download                       download model weights (login node)
     python llm.py classify --model qwen3-4b      label posts as hate / offensive / neither
-                                                 (Davidson test, HateCheck, perturbed posts)
+                                                 (Davidson test, HateCheck, perturbed posts, HateXplain test)
     python llm.py guard                          Llama Guard 3 on the same posts
     python llm.py refusal --model qwen3-4b       answer the refusal test requests
                                                  (original and perturbed)
@@ -36,7 +36,7 @@ PRIVATE = Path("outputs/private")   # raw model answers to the refusal test (git
 HIDDEN = Path("outputs/hidden")     # hidden states (.npy, git-ignored)
 PROMPTING = Path("outputs/prompting")
 PIPELINE = Path("outputs/pipeline")
-EVAL_SETS = {"davidson_test": "orig_id", "hatecheck": "case_id", "perturbed": "id"}
+EVAL_SETS = {"davidson_test": "orig_id", "hatecheck": "case_id", "perturbed": "id", "hatexplain_test": "id"}
 REQUEST_SETS = {"": "refusal_requests", "_perturbed": "refusal_requests_perturbed"}
 
 
