@@ -287,7 +287,7 @@ def post_span(prompt, text):
 def hidden_states(model, tok, spec, texts, batch_size=16):
     """Hidden states of every layer for the zero-shot classification prompt, pooled in two
     ways: the last prompt token (where the answer starts) and the mean over the tokens of
-    the post. Returns two float16 arrays of shape (posts, layers + 1, hidden size)."""
+    the post. Returns two float32 arrays of shape (posts, layers + 1, hidden size)."""
     last, mean = [], []
     for batch in batches(list(texts), batch_size):
         prompts = [chat_prompt(tok, spec, classification_messages(t, [])) for t in batch]
@@ -299,9 +299,9 @@ def hidden_states(model, tok, spec, texts, batch_size=16):
                    & (offsets[:, :, 1] > offsets[:, :, 0]))
         out = model(**enc.to(model.device), output_hidden_states=True, logits_to_keep=1)
         hs = torch.stack(out.hidden_states, dim=1).float()   # (batch, layers + 1, tokens, hidden)
-        last.append(hs[:, :, -1].half().cpu())
+        last.append(hs[:, :, -1].cpu())
         w = in_post.to(hs.device, hs.dtype)[:, None, :, None]
-        mean.append(((hs * w).sum(2) / w.sum(2).clamp(min=1)).half().cpu())
+        mean.append(((hs * w).sum(2) / w.sum(2).clamp(min=1)).cpu())
     return torch.cat(last).numpy(), torch.cat(mean).numpy()
 
 
@@ -354,9 +354,8 @@ def probe(args):
     pert_fold = pert.orig_id.map(fold_of).values
     f1 = lambda a, b: f1_score(a, b, labels=LABELS, average="macro", zero_division=0)
 
-    def run_layer(pool, layer):
-        Xc = X["clean"][pool][:, layer].astype(np.float32)
-        Xp = X["perturbed"][pool][:, layer].astype(np.float32)
+    def run_layer(pool, layer, Xc, Xp):
+        Xc, Xp = Xc.astype(np.float32), Xp.astype(np.float32)
         pred_c, pred_ctrl, pred_p = np.empty(len(y), object), np.empty(len(y), object), np.empty(len(pert), object)
         for k, (tr, te) in enumerate(folds):
             clf = make_pipeline(StandardScaler(), LogisticRegression(max_iter=2000)).fit(Xc[tr], y[tr])
@@ -378,7 +377,9 @@ def probe(args):
 
     n_layers = X["clean"]["last"].shape[1]
     jobs = [(pool, layer) for pool in ("last", "mean") for layer in range(n_layers)]
-    results = Parallel(n_jobs=len(os.sched_getaffinity(0)))(delayed(run_layer)(*j) for j in jobs)
+    results = Parallel(n_jobs=len(os.sched_getaffinity(0)))(
+        delayed(run_layer)(pool, layer, X["clean"][pool][:, layer], X["perturbed"][pool][:, layer])
+        for pool, layer in jobs)
     res = pd.DataFrame([r for rows in results for r in rows])
     res.to_csv(out, index=False)
     best = res[res.data == "clean"].sort_values("macro_f1_after").iloc[-1]
